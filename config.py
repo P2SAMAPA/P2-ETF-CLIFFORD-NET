@@ -17,17 +17,10 @@ UNIVERSES = {
     ]
 }
 
-# Macro columns for vector part (grade-1)
-MACRO_COLUMNS = ["VIX", "DXY", "T10Y2Y", "TBILL_3M"]   # use 4 macro factors
+MACRO_COLUMNS = ["VIX", "DXY", "T10Y2Y", "TBILL_3M"]
 
-# Rolling window for training (days)
 TRAIN_WINDOW = 252
-
-# Network hyperparameters
-CLIFFORD_ALGEBRA = "Cl(4,0)"   # 4 basis vectors
 LEARNING_RATE = 1e-3
 EPOCHS = 50
 BATCH_SIZE = 32
-HIDDEN_MV_DIM = 16   # hidden multivector dimension (number of blades)
-
 TOP_N = 3
