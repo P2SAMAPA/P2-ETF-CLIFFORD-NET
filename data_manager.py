@@ -24,9 +24,7 @@ def prepare_returns_matrix(df, universe_tickers):
     return returns
 
 def get_macro_data(df):
-    """Return DataFrame of macro columns (levels)."""
     macro_cols = [c for c in config.MACRO_COLUMNS if c in df.columns]
     macro = df[macro_cols].copy()
-    # fill forward and drop initial NaN
     macro = macro.ffill().dropna()
     return macro
