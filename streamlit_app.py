@@ -13,18 +13,19 @@ st.markdown("""
     .universe-title { font-size: 1.5rem; font-weight: 600; margin-top: 1rem; margin-bottom: 1rem; padding-left: 0.5rem; border-left: 5px solid #1f77b4; }
     .etf-card { background: linear-gradient(135deg, #1f77b4 0%, #2c3e50 100%); color: white; border-radius: 15px; padding: 1rem; margin: 0.5rem; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,0.2); }
     .etf-ticker { font-size: 1.3rem; font-weight: bold; }
-    .etf-score { font-size: 1rem; margin-top: 0.3rem; }
+    .etf-score { font-size: 0.9rem; margin-top: 0.3rem; }
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="main-header">🧬 Clifford / Geometric Algebra Network</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-header">Multivector representations (scalar + vector + bivector) | Geometric inductive bias for ETF ranking</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-header">Multivector representations | Best training window (252/508d) per ETF | Geometric inductive bias</div>', unsafe_allow_html=True)
 
 st.sidebar.markdown("## 🧬 Clifford Net")
 st.sidebar.markdown(f"**Run Date:** `{st.session_state.get('run_date', 'Not loaded')}`")
 st.sidebar.markdown(f"**Next Trading Day:** `{next_trading_day()}`")
 st.sidebar.markdown("**Method:** Full Clifford Cl(4,0) geometric algebra")
-st.sidebar.markdown("**Network:** Clifford‑equivariant linear layers")
+st.sidebar.markdown("**Windows evaluated:** 252, 508 days")
+st.sidebar.markdown("**Selection:** best predicted return per ETF")
 
 OUTPUT_REPO = config.OUTPUT_REPO
 HF_TOKEN = config.HF_TOKEN
@@ -68,7 +69,7 @@ if "error" in data:
 st.session_state['run_date'] = data['run_date']
 universes = data["universes"]
 
-st.header("🏆 Top ETFs by Predicted Return (Clifford Network)")
+st.header("🏆 Top ETFs by Best Predicted Return (Multi‑Window)")
 
 for universe_name, uni_data in universes.items():
     top_etfs = uni_data.get("top_etfs", [])
@@ -82,14 +83,17 @@ for universe_name, uni_data in universes.items():
             <div class="etf-card">
                 <div class="etf-ticker">{etf['ticker']}</div>
                 <div class="etf-score">pred return = {etf['pred_return']:.4f}</div>
+                <div class="etf-score">best window = {etf['window']}d</div>
             </div>
             """, unsafe_allow_html=True)
-    with st.expander("📋 Full ranking (all ETFs)"):
+    with st.expander("📋 Full ranking (all ETFs, best window per ETF)"):
         full = uni_data.get("full_scores", {})
         if full:
-            df = pd.DataFrame(list(full.items()), columns=["ETF", "Predicted Return"])
-            df = df.sort_values("Predicted Return", ascending=False)
+            df = pd.DataFrame([
+                {"ETF": ticker, "Predicted Return": info["pred_return"], "Best Window": info["window"]}
+                for ticker, info in full.items()
+            ]).sort_values("Predicted Return", ascending=False)
             st.dataframe(df, use_container_width=True, hide_index=True)
     st.divider()
 
-st.caption("The network is trained daily on a rolling 252‑day window. Higher predicted return → stronger long signal.")
+st.caption("For each ETF, the model is trained on both 252‑day and 508‑day windows; the window yielding the highest predicted return is selected. Higher predicted return → stronger long signal.")
