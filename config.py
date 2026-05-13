@@ -19,7 +19,8 @@ UNIVERSES = {
 
 MACRO_COLUMNS = ["VIX", "DXY", "T10Y2Y", "TBILL_3M"]
 
-TRAIN_WINDOW = 252
+# Training windows (days)
+TRAIN_WINDOWS = [252, 508]   # two windows
 LEARNING_RATE = 1e-3
 EPOCHS = 50
 BATCH_SIZE = 32
