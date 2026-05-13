@@ -1,5 +1,6 @@
 import torch
 import torch.optim as optim
+import torch.nn as nn
 import numpy as np
 import pandas as pd
 from pathlib import Path
@@ -10,18 +11,11 @@ import data_manager
 from clifford_net import CliffordNet
 
 def build_multivector_features(returns_df, macro_df, corr_window=60):
-    """
-    returns_df: DataFrame of ETF log returns (index dates, columns tickers)
-    macro_df: DataFrame of macro levels (index dates, columns macro names)
-    Returns (features, etf_names) where features.shape = (n_etfs, 11)
-    """
+    # [same as earlier corrected version]
     n_etfs = returns_df.shape[1]
     etf_names = returns_df.columns.tolist()
-
-    # Grade 0: latest return
     last_returns = returns_df.iloc[-1].values.reshape(-1, 1)
-
-    # Grade 1: macro sensitivities (correlation over last corr_window days)
+    # macro sensitivities
     if len(returns_df) >= corr_window and len(macro_df) >= corr_window:
         ret_window = returns_df.iloc[-corr_window:]
         macro_diff = macro_df.iloc[-corr_window:].diff().dropna()
@@ -40,19 +34,17 @@ def build_multivector_features(returns_df, macro_df, corr_window=60):
             macro_sens = np.zeros((n_etfs, len(config.MACRO_COLUMNS)))
     else:
         macro_sens = np.zeros((n_etfs, len(config.MACRO_COLUMNS)))
-
-    # Grade 2: bivector (top 6 pairwise correlations)
+    # bivector
     if len(returns_df) >= corr_window:
         recent_corr = returns_df.iloc[-corr_window:].corr().values
         bivectors = []
         for i in range(n_etfs):
             corrs = [recent_corr[i, j] for j in range(n_etfs) if j != i]
-            top6 = sorted(corrs, reverse=True)[:6] if len(corrs) >= 6 else corrs + [0.0] * (6 - len(corrs))
+            top6 = sorted(corrs, reverse=True)[:6] if len(corrs) >= 6 else corrs + [0.0]*(6-len(corrs))
             bivectors.append(top6)
         bivectors = np.array(bivectors)
     else:
         bivectors = np.zeros((n_etfs, 6))
-
     features = np.concatenate([last_returns, macro_sens, bivectors], axis=1)
     return features, etf_names
 
@@ -77,7 +69,7 @@ def main():
         if macro_df.empty:
             macro_df = pd.DataFrame(0, index=returns.index, columns=config.MACRO_COLUMNS)
 
-        # Build daily samples (day‑by‑day)
+        # Build daily samples (each sample = one day, all ETFs)
         daily_features = []
         daily_targets = []
         start_idx = max(0, len(returns) - config.TRAIN_WINDOW - 50)
@@ -87,17 +79,20 @@ def main():
                 continue
             features, _ = build_multivector_features(window_returns, macro_df, corr_window=60)
             target = returns.iloc[i+1].values
-            daily_features.append(features)
-            daily_targets.append(target)
+            daily_features.append(features)   # shape (n_etfs, 11)
+            daily_targets.append(target)      # shape (n_etfs,)
 
         if len(daily_features) < 50:
             print("  Not enough daily samples")
             continue
 
+        # Convert to tensors
         X = torch.tensor(np.array(daily_features), dtype=torch.float32)   # (T, n_etfs, 11)
         y = torch.tensor(np.array(daily_targets), dtype=torch.float32)    # (T, n_etfs)
-        X_flat = X.view(-1, X.shape[-1])
-        y_flat = y.view(-1)
+
+        # Flatten across days and ETFs: each sample is (etf, day) pair
+        X_flat = X.view(-1, X.shape[-1])          # (T * n_etfs, 11)
+        y_flat = y.view(-1)                      # (T * n_etfs,)
         valid = ~torch.isnan(y_flat)
         X_flat = X_flat[valid]
         y_flat = y_flat[valid]
@@ -122,7 +117,7 @@ def main():
                 batch_idx = idx[i:i+config.BATCH_SIZE]
                 Xb = X_train[batch_idx].unsqueeze(1)   # (batch, 1, 11)
                 yb = y_train[batch_idx]
-                pred = net(Xb).squeeze()
+                pred = net(Xb).squeeze()               # (batch,)
                 loss = criterion(pred, yb)
                 optimizer.zero_grad()
                 loss.backward()
@@ -132,14 +127,14 @@ def main():
                 Xv = X_val.unsqueeze(1)
                 val_pred = net(Xv).squeeze()
                 val_loss = criterion(val_pred, y_val)
-            if (epoch + 1) % 10 == 0:
+            if (epoch+1) % 10 == 0:
                 print(f"    Epoch {epoch+1}/{config.EPOCHS}, train loss: {loss.item():.4f}, val loss: {val_loss.item():.4f}")
 
-        # Predict for current day
+        # Predict for current day (all ETFs)
         last_features, etf_names = build_multivector_features(returns, macro_df, corr_window=60)
-        last_tensor = torch.tensor(last_features, dtype=torch.float32).unsqueeze(1)  # (n_etfs, 1, 11)
+        last_tensor = torch.tensor(last_features, dtype=torch.float32).unsqueeze(0)  # (1, n_etfs, 11)
         with torch.no_grad():
-            pred_returns = net(last_tensor).squeeze().numpy()
+            pred_returns = net(last_tensor).squeeze().numpy()   # (n_etfs,)
         sorted_idx = np.argsort(pred_returns)[::-1]
         top_etfs = []
         full_scores = {}
