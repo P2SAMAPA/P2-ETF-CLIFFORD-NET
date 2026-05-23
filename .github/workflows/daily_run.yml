@@ -2,7 +2,7 @@ name: Daily Clifford Net Run
 
 on:
   schedule:
-    - cron: '15 03 * * 1-5'
+    - cron: '15 02 * * 1-6'
   workflow_dispatch:
 
 jobs:
